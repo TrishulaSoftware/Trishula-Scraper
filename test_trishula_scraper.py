@@ -94,6 +94,22 @@ class TestMarkdownRendering(unittest.TestCase):
         md = html_to_markdown(html)
         self.assertEqual(md, "> This is a quote.  \n> Line 2.")
 
+    def test_image_rendering(self):
+        html = '<p><img src="/images/logo.png" alt="Trishula Logo"> and <img src="data:image/png;base64,iVBORw0KGgoAAA" alt="Inline Pic"></p>'
+        md = html_to_markdown(html, base_url="http://trishula.local")
+        self.assertIn("![Trishula Logo](http://trishula.local/images/logo.png)", md)
+        self.assertIn("![Inline Pic]([Base64 Data])", md)
+
+    def test_non_breaking_spaces(self):
+        html = "<p>Word1&nbsp;Word2</p>"
+        md = html_to_markdown(html)
+        self.assertEqual(md, "Word1 Word2")
+
+    def test_skip_empty_list_items(self):
+        html = "<ul><li>Item</li><li></li><li>  </li></ul>"
+        md = html_to_markdown(html)
+        self.assertEqual(md, "- Item")
+
 class TestTableRendering(unittest.TestCase):
     def test_simple_table(self):
         html = """
@@ -153,6 +169,29 @@ class TestTableRendering(unittest.TestCase):
         self.assertNotIn("Text to exclude", md)
         self.assertIn("| Header |", md)
         self.assertIn("| Cell   |", md)
+
+    def test_table_pipe_escaping(self):
+        html = """
+        <table>
+            <tr><th>Team | Player</th></tr>
+            <tr><td>Lakers | LeBron</td></tr>
+        </table>
+        """
+        md = html_to_markdown(html)
+        self.assertIn("Team \\| Player", md)
+        self.assertIn("Lakers \\| LeBron", md)
+
+    def test_table_colspan(self):
+        html = """
+        <table>
+            <tr><th>Col A</th><th>Col B</th></tr>
+            <tr><td colspan="2">Merged Cell</td></tr>
+        </table>
+        """
+        md = html_to_markdown(html)
+        self.assertIn("Col A", md)
+        self.assertIn("Col B", md)
+        self.assertIn("Merged Cell", md)
 
 class TestFetcherAndNetwork(unittest.TestCase):
     @patch("urllib.request.urlopen")

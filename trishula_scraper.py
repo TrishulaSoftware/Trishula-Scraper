@@ -146,10 +146,19 @@ def render_table(table_node: Node, base_url: Optional[str], no_links: bool) -> s
                 if cell.tag in ("th", "td"):
                     if cell.tag == "td":
                         is_header = False
+                    colspan = 1
+                    if "colspan" in cell.attrs:
+                        try:
+                            colspan = int(cell.attrs["colspan"])
+                        except ValueError:
+                            colspan = 1
                     cell_text = render_node(cell, base_url, no_links).strip()
+                    cell_text = cell_text.replace('|', '\\|')
                     # Strip internal newlines/carriage returns to maintain row alignment
                     cell_text = re.sub(r'\s+', ' ', cell_text)
                     row_cells.append(cell_text)
+                    for _ in range(colspan - 1):
+                        row_cells.append("")
             if row_cells:
                 rows.append(row_cells)
                 row_is_header.append(is_header)
@@ -267,9 +276,10 @@ def render_node(node: Node, base_url: Optional[str] = None, no_links: bool = Fal
         items = []
         for child in node.children:
             if child.tag == "li":
-                item_text = render_node(child, base_url, no_links, list_depth + 1)
-                indent = "  " * list_depth
-                items.append(f"{indent}- {item_text.strip()}\n")
+                item_text = render_node(child, base_url, no_links, list_depth + 1).strip()
+                if item_text:
+                    indent = "  " * list_depth
+                    items.append(f"{indent}- {item_text}\n")
             else:
                 items.append(render_node(child, base_url, no_links, list_depth))
         return "\n" + "".join(items) + "\n"
@@ -279,16 +289,28 @@ def render_node(node: Node, base_url: Optional[str] = None, no_links: bool = Fal
         index = 1
         for child in node.children:
             if child.tag == "li":
-                item_text = render_node(child, base_url, no_links, list_depth + 1)
-                indent = "  " * list_depth
-                items.append(f"{indent}{index}. {item_text.strip()}\n")
-                index += 1
+                item_text = render_node(child, base_url, no_links, list_depth + 1).strip()
+                if item_text:
+                    indent = "  " * list_depth
+                    items.append(f"{indent}{index}. {item_text}\n")
+                    index += 1
             else:
                 items.append(render_node(child, base_url, no_links, list_depth))
         return "\n" + "".join(items) + "\n"
 
     if tag == "li":
         return content
+
+    if tag == "img":
+        src = node.attrs.get("src", "")
+        alt = node.attrs.get("alt", "Image")
+        if src:
+            if src.startswith("data:"):
+                return f" ![{alt}]([Base64 Data]) "
+            if base_url:
+                src = urllib.parse.urljoin(base_url, src)
+            return f" ![{alt}]({src}) "
+        return ""
 
     if tag == "table":
         return render_table(node, base_url, no_links)
@@ -311,6 +333,8 @@ def extract_tables_only(node: Node, base_url: Optional[str], no_links: bool) -> 
 
 def clean_markdown(md_text: str) -> str:
     """Normalizes excessive newlines and whitespace in output markdown."""
+    # Replace non-breaking spaces with standard spaces
+    md_text = md_text.replace('\xa0', ' ')
     # Compress 3+ newlines to exactly 2
     cleaned = re.sub(r'\n{3,}', '\n\n', md_text)
     
